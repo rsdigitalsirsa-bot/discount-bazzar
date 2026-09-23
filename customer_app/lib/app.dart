@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 class DiscountBazzarApp extends StatelessWidget {
   const DiscountBazzarApp({super.key});
@@ -8,18 +7,15 @@ class DiscountBazzarApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'Discount Bazzar',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00796B),
-          brightness: Brightness.light,
+          seedColor: Colors.deepPurple,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF7FAF9),
-        fontFamily: 'Roboto',
+        useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const LoginScreen(),
     );
   }
 }
