@@ -16,10 +16,7 @@ class LoginScreen extends StatelessWidget {
               const Text(
                 'DISCOUNT BAZZAR',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               const Text(
@@ -30,10 +27,7 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 40),
               const Text(
                 'Login with Mobile Number',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 16),
               TextField(
