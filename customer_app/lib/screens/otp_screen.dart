@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+
 import '../services/api_service.dart';
+import '../services/auth_storage.dart';
 import 'home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String mobile;
-  final String? developmentOtp;
+  final String developmentOtp;
 
   const OtpScreen({
     super.key,
     required this.mobile,
-    this.developmentOtp,
+    required this.developmentOtp,
   });
 
   @override
@@ -17,126 +19,125 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final otpController = TextEditingController();
-  bool loading = false;
+  final _otpController = TextEditingController();
+  bool _loading = false;
+  String? _error;
 
-  Future<void> verify() async {
-    if (otpController.text.trim().length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter 6 digit OTP')),
-      );
+  @override
+  void dispose() {
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    final otp = _otpController.text.trim();
+
+    if (otp.length != 6) {
+      setState(() => _error = 'Please enter the 6-digit OTP');
       return;
     }
 
-    setState(() => loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     try {
-      await ApiService.verifyOtp(
-        widget.mobile,
-        otpController.text.trim(),
+      final result = await ApiService.verifyOtp(
+        mobile: widget.mobile,
+        otp: otp,
+      );
+
+      final token = result['token']?.toString();
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Login token was not received');
+      }
+
+      await AuthStorage.saveSession(
+        token: token,
+        mobile: widget.mobile,
+        role: result['user']?['role']?.toString() ?? 'CUSTOMER',
       );
 
       if (!mounted) return;
 
-      Navigator.pushAndRemoveUntil(
-        context,
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Verify OTP'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 35),
-
-            const Text(
-              'Enter OTP',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
+      appBar: AppBar(title: const Text('Verify OTP')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 30),
+              const Text(
+                'Enter OTP',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
-            ),
-
-            const SizedBox(height: 10),
-
-            Text(
-              'OTP sent to +91 ${widget.mobile}',
-              style: const TextStyle(color: Colors.grey),
-            ),
-
-            const SizedBox(height: 30),
-
-            TextField(
-              controller: otpController,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 26,
-                letterSpacing: 8,
-                fontWeight: FontWeight.bold,
-              ),
-              decoration: const InputDecoration(
-                hintText: '000000',
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            if (widget.developmentOtp != null) ...[
               const SizedBox(height: 10),
               Text(
-                'Development OTP: ${widget.developmentOtp}',
+                'OTP sent to +91 ${widget.mobile}',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 25),
+              TextField(
+                controller: _otpController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
                 textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 28, letterSpacing: 8),
+                decoration: const InputDecoration(
+                  hintText: '000000',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Development OTP: ${widget.developmentOtp}',
                 style: const TextStyle(
                   color: Colors.orange,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 15),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+              const SizedBox(height: 25),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _verify,
+                  child: _loading
+                      ? const CircularProgressIndicator()
+                      : const Text('VERIFY & CONTINUE'),
                 ),
               ),
             ],
-
-            const SizedBox(height: 25),
-
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: loading ? null : verify,
-                child: loading
-                    ? const CircularProgressIndicator()
-                    : const Text(
-                        'VERIFY & CONTINUE',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    otpController.dispose();
-    super.dispose();
   }
 }

@@ -1,7 +1,9 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+
 const { createOtp, verifyOtp } = require('../services/otp.service');
+const { query } = require('../config/database');
 
 const router = express.Router();
 
@@ -31,8 +33,6 @@ router.post('/request-otp', otpLimiter, (req, res) => {
 
   const otp = createOtp(String(mobile));
 
-  // Development mode only.
-  // Production SMS provider will be connected later.
   console.log(`[DEV OTP] ${mobile}: ${otp}`);
 
   return res.json({
@@ -42,7 +42,7 @@ router.post('/request-otp', otpLimiter, (req, res) => {
   });
 });
 
-router.post('/verify-otp', (req, res) => {
+router.post('/verify-otp', async (req, res) => {
   const { mobile, otp, role = 'CUSTOMER' } = req.body;
 
   const allowedRoles = ['CUSTOMER', 'SHOPKEEPER', 'ADMIN'];
@@ -51,6 +51,13 @@ router.post('/verify-otp', (req, res) => {
     return res.status(400).json({
       success: false,
       message: 'Mobile and OTP are required',
+    });
+  }
+
+  if (!/^[0-9]{10}$/.test(String(mobile))) {
+    return res.status(400).json({
+      success: false,
+      message: 'Valid 10-digit mobile number is required',
     });
   }
 
@@ -67,26 +74,64 @@ router.post('/verify-otp', (req, res) => {
     return res.status(401).json(result);
   }
 
-  const token = jwt.sign(
-    {
-      mobile: String(mobile),
-      role,
-    },
-    JWT_SECRET,
-    {
-      expiresIn: '7d',
-    }
-  );
+  try {
+    const existingUser = await query(
+      `SELECT id, mobile, role, name, email, profile_photo, city_id, is_active
+       FROM users
+       WHERE mobile = $1
+       LIMIT 1`,
+      [String(mobile)]
+    );
 
-  return res.json({
-    success: true,
-    message: 'OTP verified successfully',
-    token,
-    user: {
-      mobile: String(mobile),
-      role,
-    },
-  });
+    let user;
+
+    if (existingUser.rows.length === 0) {
+      const created = await query(
+        `INSERT INTO users (mobile, role)
+         VALUES ($1, $2)
+         RETURNING id, mobile, role, name, email, profile_photo, city_id, is_active`,
+        [String(mobile), role]
+      );
+
+      user = created.rows[0];
+    } else {
+      user = existingUser.rows[0];
+
+      if (!user.is_active) {
+        return res.status(403).json({
+          success: false,
+          message: 'User account is inactive',
+        });
+      }
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        mobile: user.mobile,
+        role: user.role,
+      },
+      JWT_SECRET,
+      {
+        expiresIn: '7d',
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully',
+      token,
+      user,
+    });
+  } catch (error) {
+    console.error('AUTH DB ERROR:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to save user information',
+      error: error.message,
+    });
+  }
 });
 
 module.exports = router;

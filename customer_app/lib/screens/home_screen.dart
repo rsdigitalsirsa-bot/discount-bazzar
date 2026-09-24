@@ -1,3 +1,5 @@
+import '../services/auth_storage.dart';
+import 'login_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'shop_details_screen.dart';
@@ -449,16 +451,260 @@ class _FavoritesPage extends StatelessWidget {
   }
 }
 
-class _ProfilePage extends StatelessWidget {
+
+class _ProfilePage extends StatefulWidget {
   const _ProfilePage();
 
   @override
+  State<_ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<_ProfilePage> {
+  String? _name;
+  String? _mobile;
+  String? _email;
+  String? _city;
+  String? _role;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final name = await AuthStorage.getName();
+    final mobile = await AuthStorage.getMobile();
+    final email = await AuthStorage.getEmail();
+    final city = await AuthStorage.getCity();
+    final role = await AuthStorage.getRole();
+
+    if (!mounted) return;
+
+    setState(() {
+      _name = name;
+      _mobile = mobile;
+      _email = email;
+      _city = city;
+      _role = role;
+    });
+  }
+
+  Future<void> _editProfile() async {
+    final nameController = TextEditingController(text: _name ?? '');
+    final emailController = TextEditingController(text: _email ?? '');
+    final cityController = TextEditingController(text: _city ?? '');
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Edit Profile'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: cityController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'City',
+                    prefixIcon: Icon(Icons.location_city_outlined),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('CANCEL'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                final email = emailController.text.trim();
+                final city = cityController.text.trim();
+
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter your name')),
+                  );
+                  return;
+                }
+
+                await AuthStorage.updateProfile(
+                  name: name,
+                  email: email,
+                  city: city,
+                );
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
+              child: const Text('SAVE'),
+            ),
+          ],
+        );
+      },
+    );
+
+    nameController.dispose();
+    emailController.dispose();
+    cityController.dispose();
+
+    if (saved == true) {
+      await _loadProfile();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
+    }
+  }
+
+  Future<void> _logout() async {
+    await AuthStorage.logout();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Profile',
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    final displayName =
+        (_name == null || _name!.trim().isEmpty) ? 'Customer' : _name!;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        actions: [
+          IconButton(
+            tooltip: 'Edit Profile',
+            onPressed: _editProfile,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          CircleAvatar(
+            radius: 42,
+            child: Text(
+              displayName.substring(0, 1).toUpperCase(),
+              style: const TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: Text(
+              displayName,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              _role ?? 'CUSTOMER',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 25),
+
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: _editProfile,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('EDIT PROFILE'),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.phone_outlined),
+                  title: const Text('Mobile Number'),
+                  subtitle: Text(
+                    _mobile == null || _mobile!.isEmpty
+                        ? 'Not available'
+                        : '+91 $_mobile',
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.email_outlined),
+                  title: const Text('Email'),
+                  subtitle: Text(
+                    _email == null || _email!.isEmpty
+                        ? 'Not added'
+                        : _email!,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.location_city_outlined),
+                  title: const Text('City'),
+                  subtitle: Text(
+                    _city == null || _city!.isEmpty
+                        ? 'Not added'
+                        : _city!,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          OutlinedButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+            label: const Text('LOGOUT'),
+          ),
+        ],
       ),
     );
   }
 }
+
