@@ -1,0 +1,40 @@
+
+name: Build Shopkeeper APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: shopkeeper_app
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: shopkeeper_app
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopkeeper-app-apk
+          path: shopkeeper_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
