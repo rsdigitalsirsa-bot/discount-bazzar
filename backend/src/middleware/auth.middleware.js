@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'discount-bazzar-development-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function authenticate(req, res, next) {
   const header = req.headers.authorization;

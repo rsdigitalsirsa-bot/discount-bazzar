@@ -8,7 +8,7 @@ const { query } = require('../config/database');
 const router = express.Router();
 
 const JWT_SECRET =
-  process.env.JWT_SECRET || 'discount-bazzar-development-secret';
+  process.env.JWT_SECRET;
 
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -20,6 +20,20 @@ const otpLimiter = rateLimit({
     message: 'Too many OTP requests. Please try again later.',
   },
 });
+
+const verifyOtpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many OTP verification attempts. Please try again later.',
+  },
+});
+
+const exposeDevelopmentOtp =
+  process.env.ENABLE_DEV_OTP === 'true';
 
 router.post('/request-otp', otpLimiter, (req, res) => {
   const { mobile } = req.body;
@@ -33,16 +47,20 @@ router.post('/request-otp', otpLimiter, (req, res) => {
 
   const otp = createOtp(String(mobile));
 
-  console.log(`[DEV OTP] ${mobile}: ${otp}`);
+  if (exposeDevelopmentOtp) {
+    console.log(`[DEV OTP] ${mobile}: ${otp}`);
+  }
 
   return res.json({
     success: true,
     message: 'OTP generated successfully',
-    developmentOtp: otp,
+    ...(exposeDevelopmentOtp
+      ? { developmentOtp: otp }
+      : {}),
   });
 });
 
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', verifyOtpLimiter, async (req, res) => {
   const { mobile, otp, role = 'CUSTOMER' } = req.body;
 
   const allowedRoles = ['CUSTOMER', 'SHOPKEEPER', 'ADMIN'];
@@ -86,6 +104,13 @@ router.post('/verify-otp', async (req, res) => {
     let user;
 
     if (existingUser.rows.length === 0) {
+      if (role === 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin account must be created by an authorized administrator',
+        });
+      }
+
       const created = await query(
         `INSERT INTO users (mobile, role)
          VALUES ($1, $2)
@@ -96,6 +121,13 @@ router.post('/verify-otp', async (req, res) => {
       user = created.rows[0];
     } else {
       user = existingUser.rows[0];
+
+      if (user.role !== role) {
+        return res.status(403).json({
+          success: false,
+          message: 'Selected role does not match this account',
+        });
+      }
 
       if (!user.is_active) {
         return res.status(403).json({
